@@ -2,7 +2,7 @@ Deze extensie doet het volgende:
 
 **1. werkadres**
 
-Wanneer een persoon opgeslagen wordt en die persoon heet een organisatie (werkgever), dan zal het adres van de organisatie toegevoegd worden als werkadres bij die persoon.
+Wanneer een persoon opgeslagen wordt en die persoon heeft een organisatie (werkgever), dan zal het adres van de organisatie toegevoegd worden als werkadres bij die persoon.
 
 Wordt de organisatie (werkgever) verwijderd of gewijzigd bij die persoon, dan zal het werkadres mee aangepast worden.
 
