@@ -4,13 +4,22 @@ require_once 'contactchecker.civix.php';
 
 
 function contactchecker_civicrm_post($op, $objectName, $objectId, &$objectRef) {
+  $returnMessage = '';
+
   if ($objectName == 'Individual' && ($op == 'create' || $op == 'edit')) {
-    _contactchecker_add_work_address($objectId);
+    $returnMessage = _contactchecker_add_work_address($objectId);
+    $returnMessage .= _contactchecker_autofill_fields($objectId);
   }
-watchdog('alain', $objectName);
+
+  if ($returnMessage && $op = 'edit') {
+    $returnMessage .= '<br>Ververs het scherm om de wijzigen te zien.';
+    CRM_Core_Session::setStatus($returnMessage, 'Kunstenpunt', 'info');
+  }
 }
 
 function _contactchecker_add_work_address($contactID) {
+  $returnMessage = '';
+
   // get the address id of the employer,
   // and the work address of this contact
   $sql = "
@@ -35,34 +44,106 @@ function _contactchecker_add_work_address($contactID) {
   if ($dao->fetch()) {
     // OK, this contact has an employer, and this employer has an address
     // check if we need to add a work address
-    if ($dao->contact_work_address_id && $dao->contact_work_address_master_id == $dao->contact_work_address_id) {
+    if ($dao->contact_work_address_id && $dao->contact_work_address_master_id == $dao->employer_address_id) {
       // DO NOTHING: this contact has a work address, and it is linked to the address of the employer
     }
     else {
-      // check if the contact has an work address
+      // check if the contact has a work address
       if ($dao->contact_work_address_id) {
         // remove this address
         $params = array(
           'id' => $dao->contact_work_address_id,
         );
         $a = civicrm_api3('Address', 'delete', $params);
-
-        // get the address of the employer
-        $params = array(
-          'id' => $dao->employer_address_id,
-        );
-        $a = civicrm_api3('Address', 'getsingle', $params);
-
-        // make this address the work address of the contact
-        $a['master_id'] = $a['id'];
-        $a['contact_id'] = $contactID;
-        $a['location_type_id'] = 2;
-        unset($a['id']);
-        $workAddress = civicrm_api3('Address', 'create', $a);
       }
+
+      // get the address of the employer
+      $params = array(
+        'id' => $dao->employer_address_id,
+      );
+      $a = civicrm_api3('Address', 'getsingle', $params);
+
+      // make this address the work address of the contact
+      $a['master_id'] = $a['id'];
+      $a['contact_id'] = $contactID;
+      $a['location_type_id'] = 2;
+      unset($a['id']);
+      $workAddress = civicrm_api3('Address', 'create', $a);
+      $returnMessage .= 'Het adres van de organisatie (werkgever) werd automatisch toegevoegd.<br>';
+    }
+  }
+  else {
+    // no employer, or the employer has no address
+    // remove the work address of this contact (if any)
+    $params = array(
+      'location_type_id' => 2,
+      'contact_id' => $contactID,
+    );
+
+    try {
+      $a = civicrm_api3('Address', 'getsingle', $params);
+      $params = array('id' => $a['id']);
+      civicrm_api3('Address', 'delete', $params);
+      $returnMessage .= 'Dit contact is niet gekoppeld aan een organisatie (werkgever). Het werkadres werd bijgevolg verwijderd.<br>';
+    }
+    catch (Exception $e) {
     }
   }
 
+  return $returnMessage;
+}
+
+function _contactchecker_autofill_fields($contactID) {
+  $returnMessage = '';
+
+  $sql = "
+    SELECT
+      c.prefix_id
+      , c.gender_id
+      , v.description
+      , c.is_deceased
+    FROM
+      civicrm_contact c
+    LEFT OUTER JOIN 
+      civicrm_option_value v ON v.value = c.`prefix_id` AND v.option_group_id = 6
+    WHERE
+      c.id = %1
+  ";
+  $sqlParams = array(
+    1 => array($contactID, 'Integer'),
+  );
+  $dao = CRM_Core_DAO::executeQuery($sql, $sqlParams);
+
+  if ($dao->fetch()) {
+    // Check the prefix (Ms., Mr. ...) and set the gender if needed.
+    // The description of the prefix, should contain M or V
+    if ($dao->description) {
+      // remove the html tags from the description
+      $gender = str_replace('<p>', '', $dao->description);
+      $gender = str_replace('</p>', '', $gender);
+
+      if ($gender == 'V' && $dao->gender_id != 1) {
+        $sql = 'update civicrm_contact set gender_id = 1 where id = %1';
+        CRM_Core_DAO::executeQuery($sql, $sqlParams);
+        $returnMessage .= 'Het geslacht werd op vrouwelijk gezet.<br>';
+      }
+      else if ($gender == 'M' && $dao->gender_id != 2) {
+        $sql = 'update civicrm_contact set gender_id = 2 where id = %1';
+        CRM_Core_DAO::executeQuery($sql, $sqlParams);
+        $returnMessage .= 'Het geslacht werd op mannelijk gezet.<br>';
+      }
+    }
+
+    // check if the person is deceased
+    if ($dao->is_deceased) {
+      // delete the email address(es) - if any
+      $sql = 'delete from civicrm_email where contact_id = %1';
+      CRM_Core_DAO::executeQuery($sql, $sqlParams);
+      $returnMessage .= 'De e-mailadressen van dit overleden contact werden verwijderd.<br>';
+    }
+  }
+
+  return $returnMessage;
 }
 
 /**
