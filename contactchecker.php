@@ -75,6 +75,8 @@ function _contactchecker_add_work_address($contactID) {
   else {
     // no employer, or the employer has no address
     // remove the work address of this contact (if any)
+/*
+DISABLED AFTER COMMENTS FROM GREET
     $params = array(
       'location_type_id' => 2,
       'contact_id' => $contactID,
@@ -88,6 +90,7 @@ function _contactchecker_add_work_address($contactID) {
     }
     catch (Exception $e) {
     }
+*/
   }
 
   return $returnMessage;
