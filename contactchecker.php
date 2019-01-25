@@ -16,7 +16,7 @@ function contactchecker_civicrm_post($op, $objectName, $objectId, &$objectRef) {
   }
 
   if ($returnMessage && $op == 'edit') {
-    $returnMessage .= '<br>Ververs het scherm om de wijzigen te zien.';
+    $returnMessage .= '<br>Ververs het scherm om de wijziging te zien.';
     CRM_Core_Session::setStatus($returnMessage, 'Kunstenpunt', 'info');
   }
 }
