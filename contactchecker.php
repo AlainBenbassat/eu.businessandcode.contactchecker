@@ -10,8 +10,12 @@ function contactchecker_civicrm_post($op, $objectName, $objectId, &$objectRef) {
     $returnMessage = _contactchecker_add_work_address($objectId);
     $returnMessage .= _contactchecker_autofill_fields($objectId);
   }
+  
+  if ($objectName == 'Individual' || $objectName == 'Organization' && ($op == 'create' || $op == 'edit')) {
+	$returnMessage .= _contactchecker_optout_donotemail($objectId);
+  }
 
-  if ($returnMessage && $op = 'edit') {
+  if ($returnMessage && $op == 'edit') {
     $returnMessage .= '<br>Ververs het scherm om de wijzigen te zien.';
     CRM_Core_Session::setStatus($returnMessage, 'Kunstenpunt', 'info');
   }
@@ -146,6 +150,29 @@ function _contactchecker_autofill_fields($contactID) {
     }
   }
 
+  return $returnMessage;
+}
+
+function _contactchecker_optout_donotemail($contactID) {
+  $returnMessage = '';
+
+  // if opt out or no not email is checked, check both  
+  $sql = "
+    UPDATE
+      civicrm_contact
+    SET
+      is_opt_out = 1
+      , do_not_email = 1
+    WHERE
+      id = %1
+    AND
+      is_opt_out + do_not_email = 1
+  ";
+  $sqlParams = array(
+    1 => array($contactID, 'Integer'),
+  );
+  $dao = CRM_Core_DAO::executeQuery($sql, $sqlParams);
+  
   return $returnMessage;
 }
 
